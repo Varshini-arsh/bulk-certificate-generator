@@ -14,6 +14,9 @@ def process_job(job_id: str, storage_dir: Path) -> None:
         job.status = JobStatus.PROCESSING
         db.commit()
         for certificate in job.certificates:
+            if certificate.status == CertificateStatus.FAILED:
+                db.commit()
+                continue
             try:
                 filename = f"{certificate.id}.pdf"
                 path = storage_dir / filename

@@ -66,6 +66,7 @@ The tests cover job creation, Pydantic validation, PDF generation, progress/resu
 - ReportLab generates PDFs from one predefined template in `app/certificate_service.py`.
 - FastAPI `BackgroundTasks` keeps the upload request responsive for ordinary bulk jobs. For very large production workloads, this worker should be moved to Celery/RQ with Redis or a message broker.
 - Each recipient is processed independently. Exceptions are stored on that certificate and do not prevent later recipients from running.
+- Recipient validation is also per-item: a malformed recipient is recorded as `FAILED` while valid recipients in the same request continue through generation.
 - Files are stored in the `certificates/` directory. Object storage such as S3 would be preferable in a multi-instance deployment.
 
 ## Learning and future scope

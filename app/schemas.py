@@ -1,4 +1,6 @@
 from datetime import date
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -12,7 +14,7 @@ class RecipientInput(BaseModel):
 class JobCreate(BaseModel):
     event_name: str = Field(min_length=1, max_length=200)
     issuer_name: str = Field(min_length=1, max_length=200)
-    recipients: list[RecipientInput] = Field(min_length=1, max_length=10000)
+    recipients: list[dict[str, Any]] = Field(min_length=1, max_length=10000)
 
 
 class CertificateResponse(BaseModel):

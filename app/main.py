@@ -4,11 +4,12 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
 from .models import Certificate, CertificateStatus, GenerationJob, JobStatus
-from .schemas import CertificateResponse, JobCreate, JobResponse
+from .schemas import CertificateResponse, JobCreate, JobResponse, RecipientInput
 from .worker import process_job
 
 
@@ -39,13 +40,25 @@ def health() -> dict[str, str]:
 def create_job(payload: JobCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> JobResponse:
     job = GenerationJob(id=str(uuid.uuid4()), event_name=payload.event_name,
                         issuer_name=payload.issuer_name, status=JobStatus.PENDING,
-                        total_count=len(payload.recipients))
-    for recipient in payload.recipients:
-        job.certificates.append(Certificate(
-            id=str(uuid.uuid4()), recipient_name=recipient.name.strip(), recipient_email=str(recipient.email),
-            course_name=recipient.course_name.strip(), completion_date=recipient.completion_date.isoformat(),
-            status=CertificateStatus.PENDING,
-        ))
+                        total_count=len(payload.recipients), completed_count=0, failed_count=0)
+    recipient_adapter = TypeAdapter(RecipientInput)
+    for raw_recipient in payload.recipients:
+        try:
+            recipient = recipient_adapter.validate_python(raw_recipient)
+            certificate = Certificate(
+                id=str(uuid.uuid4()), recipient_name=recipient.name.strip(),
+                recipient_email=str(recipient.email), course_name=recipient.course_name.strip(),
+                completion_date=recipient.completion_date.isoformat(), status=CertificateStatus.PENDING,
+            )
+        except ValidationError as exc:
+            certificate = Certificate(
+                id=str(uuid.uuid4()), recipient_name=str(raw_recipient.get("name", "Invalid recipient"))[:200],
+                recipient_email=str(raw_recipient.get("email", ""))[:320], course_name=str(raw_recipient.get("course_name", ""))[:200],
+                completion_date=str(raw_recipient.get("completion_date", ""))[:50], status=CertificateStatus.FAILED,
+                error_message="Invalid recipient data: " + "; ".join(error["msg"] for error in exc.errors()),
+            )
+            job.failed_count += 1
+        job.certificates.append(certificate)
     db.add(job)
     db.commit()
     db.refresh(job)

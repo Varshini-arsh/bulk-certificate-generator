@@ -28,7 +28,12 @@ def test_create_job_and_generate_certificate(client):
 
 def test_validation_error(client):
     invalid = {**PAYLOAD, "recipients": [{**PAYLOAD["recipients"][0], "email": "not-an-email"}]}
-    assert client.post("/api/jobs/", json=invalid).status_code == 422
+    response = client.post("/api/jobs/", json=invalid)
+    assert response.status_code == 202
+    job = client.get(f"/api/jobs/{response.json()['id']}/").json()
+    assert job["status"] == "COMPLETED_WITH_ERRORS"
+    assert job["failed_count"] == 1
+    assert "email" in job["certificates"][0]["error_message"]
 
 
 def test_one_failure_does_not_stop_other_recipients(client, monkeypatch):
